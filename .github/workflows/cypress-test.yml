@@ -6,7 +6,6 @@ on:
     - cron: '0 3 * * *'      # 8:30 AM IST
     - cron: '30 10 * * *'    # 4:00 PM IST
     - cron: '30 12 * * *'    # 6:00 PM IST
-    # - cron: '*/5 * * * *'    # Every 5 minutes for testing
   workflow_dispatch:
 
 jobs:
@@ -33,31 +32,36 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
+      - name: Fix Cypress Permissions
+        run: chmod +x ./node_modules/.bin/cypress || true
+
       - name: Install Cypress binary
         run: npx cypress install
 
       - name: Run Cypress Tests (Recorded)
         run: npx cypress run --record --key ${{ secrets.CYPRESS_RECORD_KEY }} --spec "cypress/e2e/**/*.cy.js"
 
-      - name: Send Slack Notification (via Webhook)
+      - name: Send Slack Notification (Cypress Bot Style)
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-          STATUS_COLOR: ${{ job.status == 'success' && '#36a64f' || '#ff0000' }}
         run: |
+          STATUS="${{ job.status }}"
+          STATUS_ICON=$([ "$STATUS" = "success" ] && echo ":white_check_mark:" || echo ":x:")
+          STATUS_COLOR=$([ "$STATUS" = "success" ] && echo "#36a64f" || echo "#ff0000")
           IST_TIME=$(TZ=Asia/Kolkata date '+%d %B %Y, %I:%M %p IST')
+
           curl -X POST -H 'Content-type: application/json' \
           --data "{
-            \"channel\": \"C092F988WRL\",
             \"username\": \"Cypress Bot\",
             \"icon_emoji\": \":rocket:\",
             \"attachments\": [
               {
-                \"color\": \"${STATUS_COLOR}\",
-                \"text\": \":rocket: *Cypress Test Report* - [uptor.in/workshops](https://uptor.in/workshops)\n:white_check_mark: *Status:* \`${{ job.status }}\`\n👤 *Author:* \`Abinesh_Sk\`\n🔗 *Commit:* <https://github.com/${{ github.repository }}/commit/${{ github.sha }}|View Commit>\n🔍 *Workflow Run:* <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>\n⏰ *Date & Time:* \`${IST_TIME}\`\"
+                \"color\": \"$STATUS_COLOR\",
+                \"text\": \":rocket: *Cypress Test Report*\n:globe_with_meridians: *URL:* <https://uptor.in/workshops>\n$STATUS_ICON *Status:* \`$STATUS\`\n:silhouette: *Author:* \`Abinesh_SK\`\n:link: *Commit:* <https://github.com/${{ github.repository }}/commit/${{ github.sha }}|View Commit>\n:gear: *Workflow:* <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|Run>\n:clock10: *Time:* \`$IST_TIME\`\" 
               }
             ]
-          }" $SLACK_WEBHOOK
+          }" "$SLACK_WEBHOOK"
 
   test-cron-job:
     runs-on: ubuntu-22.04
