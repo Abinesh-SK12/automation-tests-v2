@@ -6,7 +6,6 @@ on:
     - cron: '0 3 * * *'      # 8:30 AM IST
     - cron: '30 10 * * *'    # 4:00 PM IST
     - cron: '30 12 * * *'    # 6:00 PM IST
-   
   workflow_dispatch:
 
 jobs:
@@ -33,11 +32,13 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      - name: Install Cypress binary
-        run: npx cypress install
+      - name: Install Cypress binary and fix permissions
+        run: |
+          npx cypress install
+          chmod +x ./node_modules/.bin/cypress
 
       - name: Run Cypress Tests (Recorded)
-        run: npx cypress run --record --key ${{ secrets.CYPRESS_RECORD_KEY }} --spec "cypress/e2e/**/*.cy.js"
+        run: ./node_modules/.bin/cypress run --record --key ${{ secrets.CYPRESS_RECORD_KEY }} --spec "cypress/e2e/**/*.cy.js"
 
       - name: Send Slack Notification (via Webhook)
         if: always()
@@ -54,7 +55,7 @@ jobs:
             \"attachments\": [
               {
                 \"color\": \"${STATUS_COLOR}\",
-                \"text\": \":rocket: *Cypress Test Report* - [uptor.in/workshops](https://uptor.in/workshops)\n:white_check_mark: *Status:* \`${{ job.status }}\`\n👤 *Author:* \`Abinesh_Sk\`\n🔗 *Commit:* <https://github.com/${{ github.repository }}/commit/${{ github.sha }}|View Commit>\n🔍 *Workflow Run:* <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>\n⏰ *Date & Time:* \`${IST_TIME}\`\"
+                \"text\": \":rocket: *Cypress Test Report*\n🌐 *URL:* [uptor.in/workshops](https://uptor.in/workshops)\n:white_check_mark: *Status:* \`${{ job.status }}\`\n👤 *Author:* \`Abinesh_SK\`\n🔗 *Commit:* <https://github.com/${{ github.repository }}/commit/${{ github.sha }}|View Commit>\n🔍 *Workflow Run:* <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>\n🕒 *Run Time:* \`${IST_TIME}\`\" 
               }
             ]
           }" $SLACK_WEBHOOK
@@ -63,4 +64,4 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Log Current Time (Cron Test)
-        run: echo "⏰ Cron test ran at $(date)"
+        run: echo "⏰ Cron test ran at $(TZ=Asia/Kolkata date)"
