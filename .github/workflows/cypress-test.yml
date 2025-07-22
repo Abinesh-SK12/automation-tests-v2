@@ -1,88 +1,66 @@
-name: Cypress Tests
+name: Run Cypress Tests Twice Daily
 
-on: 
+on:
   push:
-    branches:
-      - main
-  workflow_dispatch:
   schedule:
-    - cron: "0 6,9,12,15 * * *" 
-    - cron: "0 18,22,2 * * *"
+    - cron: '0 3 * * *'      # 8:30 AM IST
+    - cron: '30 10 * * *'    # 4:00 PM IST
+    - cron: '30 12 * * *'    # 6:00 PM IST
+    # - cron: '*/5 * * * *'    # Every 5 minutes for testing
+  workflow_dispatch:
 
 jobs:
   cypress-run:
     runs-on: ubuntu-22.04
 
-    env:
-      NPM_CONFIG_REGISTRY: https://npm.dev.lmesacademy.net
-      NPM_CONFIG_STRICT_SSL: false
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-    strategy:
-      max-parallel: 1
-      matrix:
-        node-version: [20.x]
-
     steps:
-      - name: Checkout
+      - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Use Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 18
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2.0.1
-        with:
-          version: 7
-          run_install: false
-
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
-
-      - name: Setup pnpm cache
-        uses: actions/cache@v3
-        with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
-      - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
-
-      - name: Cache Cypress Binary
+      - name: Cache Cypress binary
         uses: actions/cache@v3
         with:
           path: ~/.cache/Cypress
-          key: cypress-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-cypress-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
-            cypress-${{ runner.os }}-
+            ${{ runner.os }}-cypress-
 
-      - name: Install Cypress
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Install Cypress binary
         run: npx cypress install
 
-      - name: Verify Cypress Installation
-        run: npx cypress verify
+      - name: Run Cypress Tests (Recorded)
+        run: npx cypress run --record --key ${{ secrets.CYPRESS_RECORD_KEY }} --spec "cypress/e2e/**/*.cy.js"
 
-      - name: Run Cypress Tests
-        run: |
-          npx cypress run \
-            --browser chrome \
-            --record \
-            --key b9677723-0fc7-4365-9843-448274ce4728 \
-            --parallel \
-            --ci-build-id $(uuidgen) \
-            --spec "cypress/e2e/**/*.cy.js"
-
-      - name: Notify Slack
+      - name: Send Slack Notification (via Webhook)
         if: always()
-        uses: slackapi/slack-github-action@v1
-        with:
-          channel-id: 'C092F988WRL'
-          payload: |
-            {
-              "text": "🚀 Cypress chitti.app/workshops have completed!\n${{ job.status == 'success' && '✅' || '❌' }} *Status*: ${{ job.status }}\n👤 *Author*: ${{ github.event.head_commit.author.name }}\n🔗 *Commit*: <${{ github.event.head_commit.url }}|View Commit>\n🔍 *Runs*: <https://cloud.cypress.io/projects/ywcofu/branches/main/runs| View Runs>"
-            }
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          STATUS_COLOR: ${{ job.status == 'success' && '#36a64f' || '#ff0000' }}
+        run: |
+          IST_TIME=$(TZ=Asia/Kolkata date '+%d %B %Y, %I:%M %p IST')
+          curl -X POST -H 'Content-type: application/json' \
+          --data "{
+            \"channel\": \"C092F988WRL\",
+            \"username\": \"Cypress Bot\",
+            \"icon_emoji\": \":rocket:\",
+            \"attachments\": [
+              {
+                \"color\": \"${STATUS_COLOR}\",
+                \"text\": \":rocket: *Cypress Test Report* - [uptor.in/workshops](https://uptor.in/workshops)\n:white_check_mark: *Status:* \`${{ job.status }}\`\n👤 *Author:* \`Abinesh_Sk\`\n🔗 *Commit:* <https://github.com/${{ github.repository }}/commit/${{ github.sha }}|View Commit>\n🔍 *Workflow Run:* <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>\n⏰ *Date & Time:* \`${IST_TIME}\`\"
+              }
+            ]
+          }" $SLACK_WEBHOOK
+
+  test-cron-job:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Log Current Time (Cron Test)
+        run: echo "⏰ Cron test ran at $(date)"
