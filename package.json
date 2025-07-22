@@ -11,7 +11,8 @@
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "cypress": "^14.5.2"
+    "cypress": "^14.5.2",
+    "cypress-iframe": "^1.0.1"
   },
   "dependencies": {
     "cypress-real-events": "^1.14.0"
