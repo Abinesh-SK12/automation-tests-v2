@@ -38,7 +38,7 @@ jobs:
           chmod +x ./node_modules/.bin/cypress
 
       - name: Run Cypress Tests (Recorded)
-        run: ./node_modules/.bin/cypress run --record --key ${{ secrets.CYPRESS_RECORD_KEY }} --spec "cypress/e2e/**/*.cy.js"
+        run: ./node_modules/.bin/cypress run --record --key ${{ secrets.CYPRESS_RECORD_KEY }}--spec "cypress/e2e/**/*.cy.js"
 
       - name: Send Slack Notification (via Webhook)
         if: always()
