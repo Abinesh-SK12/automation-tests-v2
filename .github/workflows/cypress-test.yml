@@ -7,22 +7,21 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "0 6,9,12,15 * * *" 
-    - cron: "0 18,22,2 * * *"   
-
+    - cron: "0 18,22,2 * * *"
 
 jobs:
   cypress-run:
     runs-on: ubuntu-22.04
 
-    # ← Add these env vars so pnpm always uses dev registry & skips SSL checks
     env:
       NPM_CONFIG_REGISTRY: https://npm.dev.lmesacademy.net
       NPM_CONFIG_STRICT_SSL: false
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
     strategy:
       max-parallel: 1
       matrix:
-        node-version: [20.x]  
+        node-version: [20.x]
 
     steps:
       - name: Checkout
@@ -41,9 +40,7 @@ jobs:
 
       - name: Get pnpm store directory
         id: pnpm-cache
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
 
       - name: Setup pnpm cache
         uses: actions/cache@v3
@@ -52,8 +49,6 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
-
-      # (No need for a separate "configure registry" step now)
 
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
@@ -68,13 +63,11 @@ jobs:
 
       - name: Install Cypress
         run: npx cypress install
-        shell: bash
 
       - name: Verify Cypress Installation
         run: npx cypress verify
-        shell: bash
 
-      - name: Run chitti tickets in Chrome
+      - name: Run Cypress Tests
         run: |
           npx cypress run \
             --browser chrome \
@@ -82,17 +75,14 @@ jobs:
             --key b9677723-0fc7-4365-9843-448274ce4728 \
             --parallel \
             --ci-build-id $(uuidgen) \
-            --spec "cypress/e2e/chitti.app/**/*.cy.js"
-        shell: bash
+            --spec "cypress/e2e/**/*.cy.js"
 
       - name: Notify Slack
-        if: always() # Runs even if tests fail
+        if: always()
         uses: slackapi/slack-github-action@v1
         with:
           channel-id: 'C092F988WRL'
           payload: |
-           {
-            "text": "🚀 Cypress chitti.app/workshops have completed!\n${{ job.status == 'success' && '✅' || '❌' }} *Status*: ${{ job.status }}\n👤 *Author*: ${{ github.event.head_commit.author.name }}\n🔗 *Commit*: <${{ github.event.head_commit.url }}|View Commit>\n🔍 *Runs*: <https://cloud.cypress.io/projects/ywcofu/branches/main/runs| View Runs>"
-           } 
-        env:
-          SLACK_WEBHOOK_URL: "https://hooks.slack.com/services/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"
+            {
+              "text": "🚀 Cypress chitti.app/workshops have completed!\n${{ job.status == 'success' && '✅' || '❌' }} *Status*: ${{ job.status }}\n👤 *Author*: ${{ github.event.head_commit.author.name }}\n🔗 *Commit*: <${{ github.event.head_commit.url }}|View Commit>\n🔍 *Runs*: <https://cloud.cypress.io/projects/ywcofu/branches/main/runs| View Runs>"
+            }
