@@ -50,7 +50,6 @@ jobs:
           IST_TIME=$(TZ=Asia/Kolkata date '+%d %B %Y, %I:%M %p IST')
           curl -X POST -H 'Content-type: application/json' \
           --data "{
-            \"channel\": \"C092F988WRL\",
             \"username\": \"Cypress Bot\",
             \"icon_emoji\": \":rocket:\",
             \"attachments\": [

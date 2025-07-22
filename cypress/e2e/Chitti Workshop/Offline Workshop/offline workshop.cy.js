@@ -7,7 +7,7 @@ describe('Register Test', () => {
 
     it('should log in with valid credentials and check hover effect', () => {
         cy.visit('https://chitti.app/workshops/');
-        cy.document().its('readyState').should('eq', 'complete'); // ✅ Ensure page is fully loaded
+        cy.document().its('readyState').should('eq', 'complete'); 
 
         cy.get('button.flex.items-center.justify-center.w-full').eq(1).click({ force: true });
         cy.document().its('readyState').should('eq', 'complete');
