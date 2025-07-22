@@ -1,0 +1,66 @@
+name: Run Cypress Tests Twice Daily
+
+on:
+  push:
+  schedule:
+    - cron: '0 3 * * *'      # 8:30 AM IST
+    - cron: '30 10 * * *'    # 4:00 PM IST
+    - cron: '30 12 * * *'    # 6:00 PM IST
+   
+  workflow_dispatch:
+
+jobs:
+  cypress-run:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Cache Cypress binary
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/Cypress
+          key: ${{ runner.os }}-cypress-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-cypress-
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Install Cypress binary
+        run: npx cypress install
+
+      - name: Run Cypress Tests (Recorded)
+        run: npx cypress run --record --key ${{ secrets.CYPRESS_RECORD_KEY }} --spec "cypress/e2e/**/*.cy.js"
+
+      - name: Send Slack Notification (via Webhook)
+        if: always()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          STATUS_COLOR: ${{ job.status == 'success' && '#36a64f' || '#ff0000' }}
+        run: |
+          IST_TIME=$(TZ=Asia/Kolkata date '+%d %B %Y, %I:%M %p IST')
+          curl -X POST -H 'Content-type: application/json' \
+          --data "{
+            \"channel\": \"C092F988WRL\",
+            \"username\": \"Cypress Bot\",
+            \"icon_emoji\": \":rocket:\",
+            \"attachments\": [
+              {
+                \"color\": \"${STATUS_COLOR}\",
+                \"text\": \":rocket: *Cypress Test Report* - [uptor.in/workshops](https://uptor.in/workshops)\n:white_check_mark: *Status:* \`${{ job.status }}\`\n👤 *Author:* \`Abinesh_Sk\`\n🔗 *Commit:* <https://github.com/${{ github.repository }}/commit/${{ github.sha }}|View Commit>\n🔍 *Workflow Run:* <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>\n⏰ *Date & Time:* \`${IST_TIME}\`\"
+              }
+            ]
+          }" $SLACK_WEBHOOK
+
+  test-cron-job:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Log Current Time (Cron Test)
+        run: echo "⏰ Cron test ran at $(date)"
