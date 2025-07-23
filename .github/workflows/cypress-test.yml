@@ -74,16 +74,8 @@ jobs:
         run: npx cypress verify
         shell: bash
 
-      - name: Run chitti tickets in Chrome
-        run: |
-          npx cypress run \
-            --browser chrome \
-            --record \
-            --key b9677723-0fc7-4365-9843-448274ce4728 \
-            --parallel \
-            --ci-build-id $(uuidgen) \
-            --spec "cypress/e2e/chitti.app/**/*.cy.js"
-        shell: bash
+      - name: Run Cypress Tests (Recorded)
+        run: npx cypress run --record --key ${{ secrets.CYPRESS_RECORD_KEY }} --spec "cypress/e2e/**/*.cy.js"
 
       - name: Notify Slack
         if: always() # Runs even if tests fail
