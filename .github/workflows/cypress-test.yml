@@ -12,7 +12,7 @@ on:
 
 jobs:
   cypress-run:
-    runs-on: depot-ubuntu-24.04
+    runs-on: ubuntu-22.04
 
     # ← Add these env vars so pnpm always uses dev registry & skips SSL checks
     env:
