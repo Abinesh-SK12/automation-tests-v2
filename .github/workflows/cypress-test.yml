@@ -6,6 +6,7 @@ on:
     - cron: '0 3 * * *'      # 8:30 AM IST
     - cron: '30 10 * * *'    # 4:00 PM IST
     - cron: '30 12 * * *'    # 6:00 PM IST
+    # - cron: '*/5 * * * *'  # Every 5 minutes for testing
   workflow_dispatch:
 
 jobs:
@@ -33,10 +34,9 @@ jobs:
         run: npm install
 
       - name: Install Cypress binary
-        run: npx cypress install
-
-      - name: Fix Cypress binary permissions
-        run: chmod +x ./node_modules/.bin/cypress
+        run: |
+          npx cypress install
+          chmod +x ./node_modules/.bin/cypress  # fix permission issue
 
       - name: Run Cypress Tests (Recorded)
         run: npx cypress run --record --key ${{ secrets.CYPRESS_RECORD_KEY }} --spec "cypress/e2e/**/*.cy.js"
