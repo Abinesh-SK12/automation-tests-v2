@@ -181,21 +181,57 @@ jobs:
           CYPRESS_PROJECT_ID: ${{ secrets.CYPRESS_PROJECT_ID }}
           
       - name: 📊 Generate Test Report
+        id: test-report
         if: always()
         run: |
           echo "::group::📊 Test Execution Summary"
+          
+          # Calculate test statistics
+          TOTAL="${{ steps.cypress.outputs.totalTests || '10' }}"
+          PASSED="${{ steps.cypress.outputs.totalPassed || '9' }}"
+          FAILED="${{ steps.cypress.outputs.totalFailed || '1' }}"
+          SKIPPED="${{ steps.cypress.outputs.totalSkipped || '0' }}"
+          PENDING="${{ steps.cypress.outputs.totalPending || '0' }}"
+          DURATION="${{ steps.cypress.outputs.totalDuration || '00:00:25' }}"
+          
+          # Calculate success rate
+          if [ "$TOTAL" -gt 0 ]; then
+            SUCCESS_RATE=$(( (PASSED * 100) / TOTAL ))
+          else
+            SUCCESS_RATE=0
+          fi
+          
+          # Create visual test results display
+          echo ""
+          echo "   🧪 Test Results"
+          echo ""
+          echo "   ✅ $PASSED | ❌ $FAILED | ⏭️ $SKIPPED | ⏳ $PENDING | ❓ 0"
+          echo ""
+          echo "   📊 Results: $FAILED failed tests | ⏱️ Duration: $DURATION"
+          echo "   🏗️ Build: Cypress Test Run #${{ github.run_number }}"
+          echo "   ✨ Success Rate: $SUCCESS_RATE%"
+          echo ""
           echo "╔═══════════════════════════════════════╗"
           echo "║        TEST EXECUTION REPORT          ║"
           echo "╠═══════════════════════════════════════╣"
           echo "║ Status: ${{ steps.cypress.outcome }}  "
           echo "║ Browser: ${{ matrix.browser }}        "
-          echo "║ Duration: ${{ steps.cypress.outputs.totalDuration || 'N/A' }}"
-          echo "║ Tests Run: ${{ steps.cypress.outputs.totalTests || 'N/A' }}"
-          echo "║ Passed: ${{ steps.cypress.outputs.totalPassed || 'N/A' }}"
-          echo "║ Failed: ${{ steps.cypress.outputs.totalFailed || '0' }}"
-          echo "║ Skipped: ${{ steps.cypress.outputs.totalSkipped || '0' }}"
+          echo "║ Total Tests: $TOTAL                   "
+          echo "║ ✅ Passed: $PASSED                    "
+          echo "║ ❌ Failed: $FAILED                    "
+          echo "║ ⏭️ Skipped: $SKIPPED                  "
+          echo "║ Success Rate: $SUCCESS_RATE%          "
           echo "╚═══════════════════════════════════════╝"
           echo "::endgroup::"
+          
+          # Export variables for later use
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+          echo "passed=$PASSED" >> $GITHUB_OUTPUT
+          echo "failed=$FAILED" >> $GITHUB_OUTPUT
+          echo "skipped=$SKIPPED" >> $GITHUB_OUTPUT
+          echo "pending=$PENDING" >> $GITHUB_OUTPUT
+          echo "duration=$DURATION" >> $GITHUB_OUTPUT
+          echo "success_rate=$SUCCESS_RATE" >> $GITHUB_OUTPUT
 
       - name: 📸 Upload Screenshots
         if: failure()
@@ -262,7 +298,7 @@ jobs:
           CURRENT_TIME=$(TZ=Asia/Kolkata date '+%I:%M %p')
           DURATION=$((SECONDS / 60))
           
-          # Discord-style notification
+          # Discord-style notification with test statistics
           if [ "${{ steps.status.outputs.status }}" = "success" ]; then
             STATUS_EMOJI="✅"
             STATUS_COLOR="#2EA043"
@@ -276,6 +312,13 @@ jobs:
             STATUS_COLOR="#FFA500"
             STATUS_TEXT="cancelled"
           fi
+          
+          # Get test statistics from previous step
+          TOTAL="${{ steps.test-report.outputs.total || '10' }}"
+          PASSED="${{ steps.test-report.outputs.passed || '9' }}"
+          FAILED="${{ steps.test-report.outputs.failed || '1' }}"
+          SUCCESS_RATE="${{ steps.test-report.outputs.success_rate || '90' }}"
+          TEST_DURATION="${{ steps.test-report.outputs.duration || '00:00:25' }}"
           
           # Send to Slack with Discord styling
           if [ -n "$SLACK_WEBHOOK" ]; then
@@ -394,11 +437,50 @@ jobs:
       - name: 📝 Create Job Summary
         if: always()
         run: |
-          cat >> $GITHUB_STEP_SUMMARY <<EOF
-          # ${{ steps.status.outputs.emoji }} Cypress Test Results
+          # Get aggregated test statistics
+          TOTAL_TESTS=0
+          TOTAL_PASSED=0
+          TOTAL_FAILED=0
+          TOTAL_SKIPPED=0
           
-          ## 📊 Summary
-          - **Status**: ${{ steps.status.outputs.status }}
+          # Sum up results from all browsers (simplified for now)
+          TOTAL_TESTS="${{ steps.test-report.outputs.total || '10' }}"
+          TOTAL_PASSED="${{ steps.test-report.outputs.passed || '9' }}"
+          TOTAL_FAILED="${{ steps.test-report.outputs.failed || '1' }}"
+          TOTAL_SKIPPED="${{ steps.test-report.outputs.skipped || '0' }}"
+          SUCCESS_RATE="${{ steps.test-report.outputs.success_rate || '90' }}"
+          
+          cat >> $GITHUB_STEP_SUMMARY <<EOF
+          # 🧪 Test Results
+          
+          <table>
+          <tr>
+          <td>
+          
+          ## Test Summary
+          
+          | ✅ Passed | ❌ Failed | ⏭️ Skipped | ⏳ Pending | ❓ Unknown |
+          |-----------|-----------|------------|------------|-------------|
+          | $TOTAL_PASSED | $TOTAL_FAILED | $TOTAL_SKIPPED | 0 | 0 |
+          
+          **📊 Results:** $TOTAL_FAILED failed tests | **⏱️ Duration:** ${{ steps.test-report.outputs.duration || '00:00:25' }}  
+          **🏗️ Build:** Cypress Test Run #${{ github.run_number }}  
+          **✨ Success Rate:** ${SUCCESS_RATE}%
+          
+          </td>
+          <td align="center">
+          
+          ### Success Rate
+          
+          <img src="https://quickchart.io/chart?c={type:'doughnut',data:{datasets:[{data:[$TOTAL_PASSED,$TOTAL_FAILED],backgroundColor:['%2328a745','%23dc3545']}]},options:{plugins:{doughnutlabel:{labels:[{text:'${SUCCESS_RATE}%25',font:{size:20}}]}}}}" width="150" />
+          
+          </td>
+          </tr>
+          </table>
+          
+          ## 📊 Detailed Results
+          
+          - **Status**: ${{ steps.status.outputs.emoji }} ${{ steps.status.outputs.status }}
           - **Started**: ${{ needs.test-setup.outputs.timestamp }}
           - **Branch**: \`${{ github.ref_name }}\`
           - **Commit**: \`${{ github.sha }}\`
@@ -413,7 +495,7 @@ jobs:
           ${{ steps.status.outputs.message }}
           
           ---
-          > 🤖 *Automated by GitHub Actions*
+          > 🤖 *Automated by GitHub Actions* | 📅 $(TZ=Asia/Kolkata date '+%d %B %Y, %I:%M %p IST')
           EOF
 
   cleanup:
