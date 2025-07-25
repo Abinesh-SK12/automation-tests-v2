@@ -110,7 +110,7 @@ jobs:
           cache: 'npm'
 
       - name: 📦 Install pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v3
         with:
           version: 8
           run_install: false
@@ -123,7 +123,7 @@ jobs:
           echo "::notice title=PNPM Store::📍 Store location: $(pnpm store path)"
 
       - name: 💾 Setup pnpm cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -139,7 +139,7 @@ jobs:
 
       - name: 💾 Cache Cypress Binary
         id: cypress-cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/Cypress
           key: cypress-${{ runner.os }}-${{ matrix.browser }}-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml') }}
@@ -199,7 +199,7 @@ jobs:
 
       - name: 📸 Upload Screenshots
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: cypress-screenshots-${{ matrix.browser }}-${{ github.run_number }}
           path: cypress/screenshots
@@ -207,7 +207,7 @@ jobs:
 
       - name: 🎥 Upload Videos
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: cypress-videos-${{ matrix.browser }}-${{ github.run_number }}
           path: cypress/videos
@@ -215,7 +215,7 @@ jobs:
 
       - name: 📄 Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: cypress-results-${{ matrix.browser }}-${{ github.run_number }}
           path: |
@@ -375,7 +375,7 @@ jobs:
           
           ## 🔗 Quick Links
           - [🎯 Test Target](https://chitti.app/workshops/)
-          - [📹 Cypress Dashboard](${{ secrets.CYPRESS_DASHBOARD_URL || 'https://dashboard.cypress.io' }})
+          - [📹 Cypress Dashboard](https://dashboard.cypress.io)
           - [📝 Full Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
           
           ## 💡 Next Steps
