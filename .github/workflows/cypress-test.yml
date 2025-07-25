@@ -254,7 +254,7 @@ jobs:
           fi
 
       - name: 💬 Send Slack Notification
-        if: always() && vars.SLACK_NOTIFICATIONS == 'true'
+        if: always() && env.SLACK_WEBHOOK != ''
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
