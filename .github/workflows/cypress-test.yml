@@ -253,112 +253,143 @@ jobs:
             echo "message=Test run was cancelled or skipped." >> $GITHUB_OUTPUT
           fi
 
-      - name: 💬 Send Slack Notification
-        if: always() && env.SLACK_WEBHOOK != ''
+      - name: 🤖 Send Discord-Style Notification
+        if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           IST_TIME=$(TZ=Asia/Kolkata date '+%d %B %Y, %I:%M %p IST')
+          CURRENT_TIME=$(TZ=Asia/Kolkata date '+%I:%M %p')
           DURATION=$((SECONDS / 60))
           
-          PAYLOAD=$(cat <<EOF
+          # Discord-style notification
+          if [ "${{ steps.status.outputs.status }}" = "success" ]; then
+            STATUS_EMOJI="✅"
+            STATUS_COLOR="#2EA043"
+            STATUS_TEXT="success"
+          elif [ "${{ steps.status.outputs.status }}" = "failure" ]; then
+            STATUS_EMOJI="❌"
+            STATUS_COLOR="#DC3545"
+            STATUS_TEXT="failure"
+          else
+            STATUS_EMOJI="⚠️"
+            STATUS_COLOR="#FFA500"
+            STATUS_TEXT="cancelled"
+          fi
+          
+          # Send to Slack with Discord styling
+          if [ -n "$SLACK_WEBHOOK" ]; then
+            SLACK_PAYLOAD=$(cat <<EOF
           {
-            "text": "${{ steps.status.outputs.emoji }} *Cypress Test Suite Completed*",
-            "blocks": [
-              {
-                "type": "header",
-                "text": {
-                  "type": "plain_text",
-                  "text": "${{ steps.status.outputs.emoji }} Cypress Test Results",
-                  "emoji": true
-                }
-              },
-              {
-                "type": "section",
-                "fields": [
-                  {
-                    "type": "mrkdwn",
-                    "text": "*Status:*\n${{ steps.status.outputs.status }}"
-                  },
-                  {
-                    "type": "mrkdwn",
-                    "text": "*Repository:*\n<https://github.com/${{ github.repository }}|${{ github.repository }}>"
-                  },
-                  {
-                    "type": "mrkdwn",
-                    "text": "*Branch:*\n${{ github.ref_name }}"
-                  },
-                  {
-                    "type": "mrkdwn",
-                    "text": "*Triggered By:*\n${{ github.actor }}"
-                  },
-                  {
-                    "type": "mrkdwn",
-                    "text": "*Event:*\n${{ github.event_name }}"
-                  },
-                  {
-                    "type": "mrkdwn",
-                    "text": "*Duration:*\n${DURATION} minutes"
-                  }
-                ]
-              },
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "*Message:* ${{ steps.status.outputs.message }}"
-                }
-              },
-              {
-                "type": "actions",
-                "elements": [
-                  {
-                    "type": "button",
-                    "text": {
-                      "type": "plain_text",
-                      "text": "View Run Details"
-                    },
-                    "style": "primary",
-                    "url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  },
-                  {
-                    "type": "button",
-                    "text": {
-                      "type": "plain_text",
-                      "text": "View Commit"
-                    },
-                    "url": "https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
-                  }
-                ]
-              },
-              {
-                "type": "context",
-                "elements": [
-                  {
-                    "type": "mrkdwn",
-                    "text": "🕐 *Timestamp:* ${IST_TIME}"
-                  }
-                ]
-              }
-            ],
+            "username": "Cypress Bot",
+            "icon_url": "https://avatars.githubusercontent.com/u/8908513?s=200&v=4",
             "attachments": [
               {
-                "color": "${{ steps.status.outputs.color }}",
+                "color": "$STATUS_COLOR",
+                "author_name": "Cypress Bot",
+                "author_icon": "https://avatars.githubusercontent.com/u/8908513?s=200&v=4",
+                "text": "APP • Today at $CURRENT_TIME",
                 "fields": [
                   {
-                    "title": "Test Target",
-                    "value": "<https://chitti.app/workshops/|Chitti Workshop Platform>",
+                    "title": "📊 Cypress Test Report - uptor.in/workshops",
+                    "value": "<https://uptor.in/workshops|https://uptor.in/workshops>",
+                    "short": false
+                  },
+                  {
+                    "title": "$STATUS_EMOJI Status:",
+                    "value": "\`$STATUS_TEXT\`",
+                    "short": false
+                  },
+                  {
+                    "title": "👤 Author:",
+                    "value": "${{ github.actor }}",
+                    "short": false
+                  },
+                  {
+                    "title": "🔗 Commit:",
+                    "value": "<https://github.com/${{ github.repository }}/commit/${{ github.sha }}|View Commit>",
+                    "short": false
+                  },
+                  {
+                    "title": "🔍 Workflow Run:",
+                    "value": "<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>",
+                    "short": false
+                  },
+                  {
+                    "title": "📅 Date & Time:",
+                    "value": "$IST_TIME",
                     "short": false
                   }
-                ]
+                ],
+                "footer": "Cypress Bot",
+                "footer_icon": "https://avatars.githubusercontent.com/u/8908513?s=200&v=4",
+                "ts": $(date +%s)
               }
             ]
           }
           EOF
-          )
+            )
+            
+            curl -s -X POST -H 'Content-type: application/json' \
+              --data "$SLACK_PAYLOAD" "$SLACK_WEBHOOK" || echo "⚠️ Failed to send Slack notification"
+          fi
           
-          curl -s -X POST -H 'Content-type: application/json' \
-            --data "$PAYLOAD" "$SLACK_WEBHOOK" || echo "⚠️ Failed to send Slack notification"
+          # Send to Discord webhook if configured
+          if [ -n "$DISCORD_WEBHOOK" ]; then
+            DISCORD_PAYLOAD=$(cat <<EOF
+          {
+            "username": "Cypress Bot",
+            "avatar_url": "https://avatars.githubusercontent.com/u/8908513?s=200&v=4",
+            "embeds": [{
+              "author": {
+                "name": "Cypress Bot",
+                "icon_url": "https://avatars.githubusercontent.com/u/8908513?s=200&v=4"
+              },
+              "color": $([ "$STATUS_TEXT" = "success" ] && echo "3066993" || echo "15158332"),
+              "fields": [
+                {
+                  "name": "📊 Cypress Test Report - uptor.in/workshops",
+                  "value": "[https://uptor.in/workshops](https://uptor.in/workshops)",
+                  "inline": false
+                },
+                {
+                  "name": "$STATUS_EMOJI Status:",
+                  "value": "\`\`\`$STATUS_TEXT\`\`\`",
+                  "inline": false
+                },
+                {
+                  "name": "👤 Author:",
+                  "value": "${{ github.actor }}",
+                  "inline": false
+                },
+                {
+                  "name": "🔗 Commit:",
+                  "value": "[View Commit](https://github.com/${{ github.repository }}/commit/${{ github.sha }})",
+                  "inline": false
+                },
+                {
+                  "name": "🔍 Workflow Run:",
+                  "value": "[View Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})",
+                  "inline": false
+                },
+                {
+                  "name": "📅 Date & Time:",
+                  "value": "$IST_TIME",
+                  "inline": false
+                }
+              ],
+              "footer": {
+                "text": "APP • Today at $CURRENT_TIME"
+              },
+              "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+            }]
+          }
+          EOF
+            )
+            
+            curl -s -X POST -H "Content-Type: application/json" \
+              -d "$DISCORD_PAYLOAD" "$DISCORD_WEBHOOK" || echo "⚠️ Failed to send Discord notification"
+          fi
 
       - name: 📝 Create Job Summary
         if: always()

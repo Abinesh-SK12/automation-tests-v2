@@ -1,0 +1,156 @@
+name: 🤖 Cypress Bot - Discord Style
+
+on:
+  workflow_call:
+    inputs:
+      status:
+        required: true
+        type: string
+      browser:
+        required: true
+        type: string
+      duration:
+        required: true
+        type: string
+      test_counts:
+        required: true
+        type: string
+
+jobs:
+  send-notification:
+    name: 📨 Send Discord-Style Notification
+    runs-on: ubuntu-22.04
+    
+    steps:
+      - name: 🎨 Generate Discord-Style Message
+        id: message
+        run: |
+          # Parse test counts
+          IFS=',' read -r total passed failed skipped <<< "${{ inputs.test_counts }}"
+          
+          # Set status emoji and color
+          if [ "${{ inputs.status }}" = "success" ]; then
+            STATUS_EMOJI="✅"
+            STATUS_COLOR="3066993"  # Green
+            STATUS_TEXT="success"
+          else
+            STATUS_EMOJI="❌"
+            STATUS_COLOR="15158332" # Red
+            STATUS_TEXT="failure"
+          fi
+          
+          # Get current time in IST
+          IST_TIME=$(TZ=Asia/Kolkata date '+%d %B %Y, %I:%M %p IST')
+          
+          # Generate Discord embed
+          echo "embed=$(cat <<EOF
+          {
+            "embeds": [{
+              "author": {
+                "name": "Cypress Bot",
+                "icon_url": "https://avatars.githubusercontent.com/u/8908513?s=200&v=4"
+              },
+              "title": "Cypress Test Report",
+              "color": $STATUS_COLOR,
+              "fields": [
+                {
+                  "name": "📊 Test Report",
+                  "value": "[uptor.in/workshops](https://uptor.in/workshops) ([https://uptor.in/workshops](https://uptor.in/workshops))",
+                  "inline": false
+                },
+                {
+                  "name": "✅ Status:",
+                  "value": "\`\`\`$STATUS_TEXT\`\`\`",
+                  "inline": false
+                },
+                {
+                  "name": "👤 Author:",
+                  "value": "Abinesh_Sk",
+                  "inline": false
+                },
+                {
+                  "name": "🔗 Commit:",
+                  "value": "[View Commit](https://github.com/${{ github.repository }}/commit/${{ github.sha }})",
+                  "inline": false
+                },
+                {
+                  "name": "🔍 Workflow Run:",
+                  "value": "[View Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})",
+                  "inline": false
+                },
+                {
+                  "name": "📅 Date & Time:",
+                  "value": "$IST_TIME",
+                  "inline": false
+                }
+              ],
+              "footer": {
+                "text": "APP • Today at $(TZ=Asia/Kolkata date '+%I:%M %p')"
+              }
+            }]
+          }
+          EOF
+          )" >> $GITHUB_OUTPUT
+
+      - name: 💬 Send to Discord Webhook
+        if: env.DISCORD_WEBHOOK != ''
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d '${{ steps.message.outputs.embed }}' \
+               $DISCORD_WEBHOOK
+
+      - name: 💬 Send to Slack (Discord Style)
+        if: env.SLACK_WEBHOOK != ''
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          # Parse test counts
+          IFS=',' read -r total passed failed skipped <<< "${{ inputs.test_counts }}"
+          
+          # Set status
+          if [ "${{ inputs.status }}" = "success" ]; then
+            STATUS_EMOJI="✅"
+            STATUS_COLOR="#2EA043"
+            STATUS_TEXT="success"
+          else
+            STATUS_EMOJI="❌"
+            STATUS_COLOR="#DC3545"
+            STATUS_TEXT="failure"
+          fi
+          
+          IST_TIME=$(TZ=Asia/Kolkata date '+%d %B %Y, %I:%M %p IST')
+          
+          PAYLOAD=$(cat <<EOF
+          {
+            "username": "Cypress Bot",
+            "icon_url": "https://avatars.githubusercontent.com/u/8908513?s=200&v=4",
+            "attachments": [
+              {
+                "color": "$STATUS_COLOR",
+                "blocks": [
+                  {
+                    "type": "section",
+                    "text": {
+                      "type": "mrkdwn",
+                      "text": "*Cypress Bot* APP  $(TZ=Asia/Kolkata date '+%I:%M %p')"
+                    }
+                  },
+                  {
+                    "type": "section",
+                    "text": {
+                      "type": "mrkdwn",
+                      "text": "📊 *Cypress Test Report* - <https://uptor.in/workshops|uptor.in/workshops> (<https://uptor.in/workshops|https://uptor.in/workshops>)\n$STATUS_EMOJI *Status:* \`$STATUS_TEXT\`\n👤 *Author:* Abinesh_Sk\n🔗 *Commit:* <https://github.com/${{ github.repository }}/commit/${{ github.sha }}|View Commit>\n🔍 *Workflow Run:* <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>\n📅 *Date & Time:* $IST_TIME"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+          )
+          
+          curl -X POST -H 'Content-type: application/json' \
+            --data "$PAYLOAD" "$SLACK_WEBHOOK"
