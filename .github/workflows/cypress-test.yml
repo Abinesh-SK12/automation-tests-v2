@@ -1,51 +1,128 @@
-name: Cypress Tests
+name: 🚀 Cypress E2E Tests
 
 on: 
   push:
     branches:
       - main
+      - develop
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+      - develop
   workflow_dispatch:
+    inputs:
+      test_environment:
+        description: 'Environment to test against'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+          - development
+      browser:
+        description: 'Browser to run tests'
+        required: true
+        default: 'chrome'
+        type: choice
+        options:
+          - chrome
+          - firefox
+          - edge
+          - electron
   schedule:
-    - cron: '0 3 * * *'  
-    - cron: '30 10 * * *'    # 4:00 PM IST  
+    - cron: '0 3 * * *'      # 8:30 AM IST
+    - cron: '30 10 * * *'    # 4:00 PM IST
 
+env:
+  CYPRESS_CACHE_FOLDER: ~/.cache/Cypress
+  NODE_ENV: test
 
 jobs:
-  cypress-run:
+  test-setup:
+    name: 🎯 Test Setup & Matrix
     runs-on: ubuntu-22.04
+    outputs:
+      test-matrix: ${{ steps.set-matrix.outputs.matrix }}
+      timestamp: ${{ steps.timestamp.outputs.time }}
+    steps:
+      - name: 🕐 Set Timestamp
+        id: timestamp
+        run: |
+          echo "time=$(TZ=Asia/Kolkata date '+%Y-%m-%d %H:%M:%S IST')" >> $GITHUB_OUTPUT
+          echo "::notice title=Test Run Started::🚀 Starting Cypress tests at $(TZ=Asia/Kolkata date '+%I:%M %p IST')"
 
-    # ← Add these env vars so pnpm always uses dev registry & skips SSL checks
+      - name: 📊 Set Test Matrix
+        id: set-matrix
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "matrix={\"browser\":[\"${{ github.event.inputs.browser }}\"]}" >> $GITHUB_OUTPUT
+          else
+            echo "matrix={\"browser\":[\"chrome\",\"firefox\",\"edge\"]}" >> $GITHUB_OUTPUT
+          fi
+
+  cypress-run:
+    name: 🧪 Cypress Tests - ${{ matrix.browser }}
+    needs: test-setup
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    
     env:
       NPM_CONFIG_REGISTRY: https://npm.dev.lmesacademy.net
       NPM_CONFIG_STRICT_SSL: false
-
+      TERM: xterm-256color
+      FORCE_COLOR: 3
+      
     strategy:
-      max-parallel: 1
-      matrix:
-        node-version: [20.x]  
-
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.test-setup.outputs.test-matrix) }}
+        
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - name: 🎨 Setup Color Output
+        run: |
+          echo "::group::🎨 Configuring Terminal Colors"
+          echo "FORCE_COLOR=3" >> $GITHUB_ENV
+          echo "CYPRESS_NO_COLOR=0" >> $GITHUB_ENV
+          echo "::endgroup::"
 
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v3
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          fetch-depth: 0
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2.0.1
+      - name: 🔍 Repository Info
+        run: |
+          echo "::group::📊 Repository Statistics"
+          echo "┌─────────────────────────────────────┐"
+          echo "│ 📁 Repository: ${{ github.repository }}"
+          echo "│ 🌿 Branch: ${{ github.ref_name }}"
+          echo "│ 💻 Commit: ${GITHUB_SHA::7}"
+          echo "│ 👤 Actor: ${{ github.actor }}"
+          echo "│ 🎯 Browser: ${{ matrix.browser }}"
+          echo "└─────────────────────────────────────┘"
+          echo "::endgroup::"
+
+      - name: 🟢 Setup Node.js 20.x
+        uses: actions/setup-node@v4
         with:
-          version: 7
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: 📦 Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
           run_install: false
 
-      - name: Get pnpm store directory
+      - name: 🗄️ Get pnpm store directory
         id: pnpm-cache
         shell: bash
         run: |
           echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+          echo "::notice title=PNPM Store::📍 Store location: $(pnpm store path)"
 
-      - name: Setup pnpm cache
+      - name: 💾 Setup pnpm cache
         uses: actions/cache@v3
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
@@ -53,52 +130,293 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      # (No need for a separate "configure registry" step now)
+      - name: 📥 Install Dependencies
+        run: |
+          echo "::group::📦 Installing project dependencies"
+          pnpm install --no-frozen-lockfile
+          echo "✅ Dependencies installed successfully!"
+          echo "::endgroup::"
 
-      - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
-
-      - name: Cache Cypress Binary
+      - name: 💾 Cache Cypress Binary
+        id: cypress-cache
         uses: actions/cache@v3
         with:
           path: ~/.cache/Cypress
-          key: cypress-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          key: cypress-${{ runner.os }}-${{ matrix.browser }}-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml') }}
           restore-keys: |
+            cypress-${{ runner.os }}-${{ matrix.browser }}-
             cypress-${{ runner.os }}-
 
-      - name: Install Cypress
-        run: npx cypress install
-        shell: bash
+      - name: 🔧 Install & Verify Cypress
+        run: |
+          echo "::group::🔧 Cypress Installation"
+          if [ "${{ steps.cypress-cache.outputs.cache-hit }}" != "true" ]; then
+            echo "📥 Installing Cypress binary..."
+            npx cypress install
+          else
+            echo "✨ Using cached Cypress binary"
+          fi
+          echo ""
+          echo "🔍 Verifying Cypress installation..."
+          npx cypress verify
+          echo ""
+          npx cypress info
+          echo "::endgroup::"
 
-      - name: Verify Cypress Installation
-        run: npx cypress verify
-        shell: bash
-
-      - name: Run Cypress Tests (Recorded)
-        run: npx cypress run --record --key ${{ secrets.CYPRESS_RECORD_KEY }} --spec "cypress/e2e/**/*.cy.js"
-
-      - name: Send Slack Notification (via Webhook)
+      - name: 🏃 Run Cypress Tests
+        id: cypress
+        uses: cypress-io/github-action@v6
+        with:
+          browser: ${{ matrix.browser }}
+          record: true
+          parallel: true
+          group: '${{ matrix.browser }}-tests'
+          tag: ${{ github.event_name }}
+          config-file: cypress.config.js
+          spec: "cypress/e2e/**/*.cy.js"
+          quiet: false
+        env:
+          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CYPRESS_PROJECT_ID: ${{ secrets.CYPRESS_PROJECT_ID }}
+          
+      - name: 📊 Generate Test Report
         if: always()
+        run: |
+          echo "::group::📊 Test Execution Summary"
+          echo "╔═══════════════════════════════════════╗"
+          echo "║        TEST EXECUTION REPORT          ║"
+          echo "╠═══════════════════════════════════════╣"
+          echo "║ Status: ${{ steps.cypress.outcome }}  "
+          echo "║ Browser: ${{ matrix.browser }}        "
+          echo "║ Duration: ${{ steps.cypress.outputs.totalDuration || 'N/A' }}"
+          echo "║ Tests Run: ${{ steps.cypress.outputs.totalTests || 'N/A' }}"
+          echo "║ Passed: ${{ steps.cypress.outputs.totalPassed || 'N/A' }}"
+          echo "║ Failed: ${{ steps.cypress.outputs.totalFailed || '0' }}"
+          echo "║ Skipped: ${{ steps.cypress.outputs.totalSkipped || '0' }}"
+          echo "╚═══════════════════════════════════════╝"
+          echo "::endgroup::"
+
+      - name: 📸 Upload Screenshots
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: cypress-screenshots-${{ matrix.browser }}-${{ github.run_number }}
+          path: cypress/screenshots
+          retention-days: 7
+
+      - name: 🎥 Upload Videos
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: cypress-videos-${{ matrix.browser }}-${{ github.run_number }}
+          path: cypress/videos
+          retention-days: 7
+
+      - name: 📄 Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: cypress-results-${{ matrix.browser }}-${{ github.run_number }}
+          path: |
+            cypress/reports
+            cypress/results
+          retention-days: 30
+
+  test-summary:
+    name: 📈 Test Summary & Notifications
+    needs: [test-setup, cypress-run]
+    runs-on: ubuntu-22.04
+    if: always()
+    
+    steps:
+      - name: 📥 Checkout for Scripts
+        uses: actions/checkout@v4
+        
+      - name: 🎯 Determine Overall Status
+        id: status
+        run: |
+          if [ "${{ needs.cypress-run.result }}" = "success" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+            echo "color=#00ff00" >> $GITHUB_OUTPUT
+            echo "message=All tests passed successfully!" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.cypress-run.result }}" = "failure" ]; then
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+            echo "color=#ff0000" >> $GITHUB_OUTPUT
+            echo "message=Some tests failed. Check the logs for details." >> $GITHUB_OUTPUT
+          else
+            echo "status=cancelled" >> $GITHUB_OUTPUT
+            echo "emoji=⚠️" >> $GITHUB_OUTPUT
+            echo "color=#ffaa00" >> $GITHUB_OUTPUT
+            echo "message=Test run was cancelled or skipped." >> $GITHUB_OUTPUT
+          fi
+
+      - name: 💬 Send Slack Notification
+        if: always() && vars.SLACK_NOTIFICATIONS == 'true'
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-          STATUS_COLOR: ${{ job.status == 'success' && '#36a64f' || '#ff0000' }}
         run: |
           IST_TIME=$(TZ=Asia/Kolkata date '+%d %B %Y, %I:%M %p IST')
-          curl -X POST -H 'Content-type: application/json' \
-          --data "{
-            \"channel\": \"C092F988WRL\",
-            \"username\": \"Cypress Bot\",
-            \"icon_emoji\": \":rocket:\",
-            \"attachments\": [
+          DURATION=$((SECONDS / 60))
+          
+          PAYLOAD=$(cat <<EOF
+          {
+            "text": "${{ steps.status.outputs.emoji }} *Cypress Test Suite Completed*",
+            "blocks": [
               {
-                \"color\": \"${STATUS_COLOR}\",
-                \"text\": \":rocket: *Cypress Test Report* - [uptor.in/workshops](https://uptor.in/workshops)\n:white_check_mark: *Status:* \`${{ job.status }}\`\n👤 *Author:* \`Abinesh_Sk\`\n🔗 *Commit:* <https://github.com/${{ github.repository }}/commit/${{ github.sha }}|View Commit>\n🔍 *Workflow Run:* <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>\n⏰ *Date & Time:* \`${IST_TIME}\`\" 
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "${{ steps.status.outputs.emoji }} Cypress Test Results",
+                  "emoji": true
+                }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Status:*\n${{ steps.status.outputs.status }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Repository:*\n<https://github.com/${{ github.repository }}|${{ github.repository }}>"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Branch:*\n${{ github.ref_name }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Triggered By:*\n${{ github.actor }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Event:*\n${{ github.event_name }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Duration:*\n${DURATION} minutes"
+                  }
+                ]
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Message:* ${{ steps.status.outputs.message }}"
+                }
+              },
+              {
+                "type": "actions",
+                "elements": [
+                  {
+                    "type": "button",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "View Run Details"
+                    },
+                    "style": "primary",
+                    "url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  },
+                  {
+                    "type": "button",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "View Commit"
+                    },
+                    "url": "https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+                  }
+                ]
+              },
+              {
+                "type": "context",
+                "elements": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "🕐 *Timestamp:* ${IST_TIME}"
+                  }
+                ]
+              }
+            ],
+            "attachments": [
+              {
+                "color": "${{ steps.status.outputs.color }}",
+                "fields": [
+                  {
+                    "title": "Test Target",
+                    "value": "<https://chitti.app/workshops/|Chitti Workshop Platform>",
+                    "short": false
+                  }
+                ]
               }
             ]
-          }" $SLACK_WEBHOOK
+          }
+          EOF
+          )
+          
+          curl -s -X POST -H 'Content-type: application/json' \
+            --data "$PAYLOAD" "$SLACK_WEBHOOK" || echo "⚠️ Failed to send Slack notification"
 
-  test-cron-job:
+      - name: 📝 Create Job Summary
+        if: always()
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY <<EOF
+          # ${{ steps.status.outputs.emoji }} Cypress Test Results
+          
+          ## 📊 Summary
+          - **Status**: ${{ steps.status.outputs.status }}
+          - **Started**: ${{ needs.test-setup.outputs.timestamp }}
+          - **Branch**: \`${{ github.ref_name }}\`
+          - **Commit**: \`${{ github.sha }}\`
+          - **Triggered by**: @${{ github.actor }}
+          
+          ## 🔗 Quick Links
+          - [🎯 Test Target](https://chitti.app/workshops/)
+          - [📹 Cypress Dashboard](${{ secrets.CYPRESS_DASHBOARD_URL || 'https://dashboard.cypress.io' }})
+          - [📝 Full Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          
+          ## 💡 Next Steps
+          ${{ steps.status.outputs.message }}
+          
+          ---
+          > 🤖 *Automated by GitHub Actions*
+          EOF
+
+  cleanup:
+    name: 🧹 Cleanup Old Artifacts
+    needs: [cypress-run]
     runs-on: ubuntu-22.04
+    if: always()
+    
     steps:
-      - name: Log Current Time (Cron Test)
-        run: echo "⏰ Cron test ran at $(date)"
+      - name: 🗑️ Delete Old Artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const days = 30;
+            const ms_per_day = 24 * 60 * 60 * 1000;
+            const now = Date.now();
+            const cutoff = new Date(now - days * ms_per_day);
+            
+            const artifacts = await github.rest.actions.listArtifactsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            
+            let deleted = 0;
+            for (const artifact of artifacts.data.artifacts) {
+              if (new Date(artifact.created_at) < cutoff) {
+                await github.rest.actions.deleteArtifact({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  artifact_id: artifact.id
+                });
+                deleted++;
+              }
+            }
+            
+            console.log(`🗑️ Deleted ${deleted} artifacts older than ${days} days`);
