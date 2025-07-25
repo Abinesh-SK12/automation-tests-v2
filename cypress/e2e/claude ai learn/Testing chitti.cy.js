@@ -1,4 +1,4 @@
-describe('Chitti Workshops - Comprehensive E2E Testing', () => {
+describe('Chitti Workshops E2E Tests', () => {
   beforeEach(() => {
     // Add better error handling
     Cypress.on('uncaught:exception', (err, runnable) => {
@@ -717,7 +717,7 @@ describe('Chitti Workshops - Comprehensive E2E Testing', () => {
           const registerButtonSelectors = [
             'button:contains(\"Register Now\")',
             'button:contains(\"Register\")',
-            'button:contains(\"Book Now\")',
+            'button:contains(\"Book Free Demo\")',
             '[data-testid=\"register-button\"]',
             '.register-button',
             'a:contains(\"Register\")'
@@ -903,7 +903,7 @@ describe('Chitti Workshops - Comprehensive E2E Testing', () => {
       cy.screenshot('workshop-card-details');
     });
 
-    it('should complete paid workshop registration with payment - CMS Electronics', () => {
+    it('should complete CMS Electronics paid registration', () => {
       cy.visit('https://chitti.app/workshops/');
       
       // Find and select CMS Electronics workshop
@@ -925,10 +925,18 @@ describe('Chitti Workshops - Comprehensive E2E Testing', () => {
             
             cy.wait(3000);
             
-            // Click Book Now button
-            cy.contains('button', 'Book Now')
-              .scrollIntoView({ duration: 1500 })
-              .click({ force: true });
+            // Click Book Now button - try multiple selectors
+            cy.get('body').then(($body) => {
+              if ($body.find('button.relative.rounded-\\[10px\\].bg-\\[\\#E94C45\\].px-8.py-3').length > 0) {
+                cy.get('button.relative.rounded-\\[10px\\].bg-\\[\\#E94C45\\].px-8.py-3').click({ force: true });
+              } else if ($body.find('button:contains("Book Now")').length > 0) {
+                cy.contains('button', 'Book Now').click({ force: true });
+              } else if ($body.find('div:contains("Book Now for")').length > 0) {
+                cy.contains('div', 'Book Now for').click({ force: true });
+              } else {
+                cy.contains('Register').click({ force: true });
+              }
+            });
             
             cy.wait(3000);
             
@@ -945,7 +953,7 @@ describe('Chitti Workshops - Comprehensive E2E Testing', () => {
             // Enter contact details
             cy.get('input[type="tel"]').type('9884226399', { delay: 20 });
             cy.wait(1000);
-            cy.get('input[placeholder="Enter the Email"]').type('dev@lmes.in', { delay: 20 });
+            cy.get('input[type="email"]').type('dev@lmes.in', { delay: 20 });
             
             // Select grade
             cy.get('select.block').eq(0).select('Class 10');
@@ -956,7 +964,7 @@ describe('Chitti Workshops - Comprehensive E2E Testing', () => {
             cy.get('input[placeholder="Enter your Pincode"]').type('600001', { delay: 20 });
             
             // Submit registration
-            cy.contains('p', 'Register').click();
+            cy.contains('button', 'Register').click();
             
             // Verify Razorpay payment iframe appears
             cy.get('iframe[src*="api.razorpay.com"]', { timeout: 10000 }).should('be.visible');
@@ -967,7 +975,7 @@ describe('Chitti Workshops - Comprehensive E2E Testing', () => {
         });
     });
 
-    it('should handle low-priced workshop with time slot - Teacher Empowerment', () => {
+    it('should handle Teacher Empowerment workshop', () => {
       cy.visit('https://chitti.app/workshops/');
       
       // Find Teacher Empowerment workshop
@@ -992,8 +1000,10 @@ describe('Chitti Workshops - Comprehensive E2E Testing', () => {
             cy.get('body').then(($body) => {
               if ($body.find('button:contains("Book Now for ₹9")').length > 0) {
                 cy.contains('button', 'Book Now for ₹9').click({ force: true });
+              } else if ($body.find('button:contains("Book Now")').length > 0) {
+                cy.contains('button', 'Book Now').click({ force: true });
               } else {
-                cy.contains('button', 'Register Now').click({ force: true });
+                cy.contains('button', 'Register').click({ force: true });
               }
             });
             
@@ -1033,7 +1043,7 @@ describe('Chitti Workshops - Comprehensive E2E Testing', () => {
         });
     });
 
-    it('should test language-specific workshop - Tamil', () => {
+    it('should test Tamil workshop', () => {
       cy.visit('https://chitti.app/workshops/');
       
       // Find Tamil language workshop
@@ -1106,7 +1116,7 @@ describe('Chitti Workshops - Comprehensive E2E Testing', () => {
       });
     });
 
-    it('should handle complex workshop selection with multiple criteria', () => {
+    it('should handle multi-criteria workshop selection', () => {
       cy.visit('https://chitti.app/workshops/');
       
       // Complex filtering logic
@@ -1282,6 +1292,73 @@ describe('Chitti Workshops - Comprehensive E2E Testing', () => {
           }
         });
       });
+    });
+
+    it('should complete Solar Tamil registration', () => {
+      cy.visit('https://chitti.app/workshops/');
+      cy.wait(3000);
+      
+      // Try image-based selection first
+      cy.get('body').then(($body) => {
+        if ($body.find('img[alt="Solar 1 on 1 - Tamil"]').length > 0) {
+          cy.get('img[alt="Solar 1 on 1 - Tamil"]')
+            .scrollIntoView({ duration: 1500 })
+            .should('be.visible')
+            .click({ force: true });
+        } else {
+          // Fallback to text-based selection
+          cy.contains('h1', 'Solar 1 on 1 - Tamil').click({ force: true });
+        }
+      });
+      
+      cy.wait(3000);
+      
+      // Click Book Now button with flexible selectors
+      cy.get('body').then(($body) => {
+        if ($body.find('div:contains("Book Now for ₹499")').length > 0) {
+          cy.contains('div', 'Book Now for ₹499').click({ force: true });
+        } else if ($body.find('button.relative.rounded-\\[10px\\].bg-\\[\\#E94C45\\].px-8.py-3').length > 0) {
+          cy.get('button.relative.rounded-\\[10px\\].bg-\\[\\#E94C45\\].px-8.py-3').click({ force: true });
+        } else {
+          cy.contains('button', 'Book Now').click({ force: true });
+        }
+      });
+      
+      cy.wait(3000);
+      
+      // Fill registration form
+      cy.get('input[placeholder="Enter the Name"]').type('Jacob Samro', { delay: 20 });
+      cy.wait(1000);
+      
+      // Handle country selection
+      cy.get('.iti__flag-container').click();
+      cy.wait(1000);
+      cy.get('.iti__country-list').contains('li', 'India').click({ force: true });
+      cy.wait(1000);
+      
+      // Enter contact details
+      cy.get('input[type="tel"]').type('9884226399', { delay: 20 });
+      cy.wait(1000);
+      cy.get('input[type="email"]').type('dev@lmes.in', { delay: 20 });
+      
+      // Select grade
+      cy.get('select.block').eq(0).select('Grade 8');
+      
+      // Fill address
+      cy.get('input[placeholder="Enter your Address"]').type('Door No.3, Survey No : 113/1, 200 Feet Radial Rd, Zamin Pallavaram, Chennai', { delay: 10 });
+      cy.wait(1000);
+      cy.get('input[placeholder="Enter your City"]').type('Chennai', { delay: 20 });
+      cy.wait(1000);
+      cy.get('input[placeholder="Enter your Pincode"]').type('600117', { delay: 20 });
+      cy.wait(1000);
+      
+      // Submit registration
+      cy.contains('button', 'Register').click();
+      cy.wait(2000);
+      
+      // Verify payment gateway loads
+      cy.get('iframe[src*="api.razorpay.com"]', { timeout: 10000 }).should('be.visible');
+      cy.screenshot('tamil-workshop-payment-gateway');
     });
   });
 });
