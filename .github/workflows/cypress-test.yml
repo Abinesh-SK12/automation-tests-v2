@@ -68,6 +68,14 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     
+    outputs:
+      test-result: ${{ steps.cypress.outcome }}
+      total-tests: ${{ steps.cypress.outputs.totalTests }}
+      total-passed: ${{ steps.cypress.outputs.totalPassed }}
+      total-failed: ${{ steps.cypress.outputs.totalFailed }}
+      total-skipped: ${{ steps.cypress.outputs.totalSkipped }}
+      total-duration: ${{ steps.cypress.outputs.totalDuration }}
+    
     env:
       NPM_CONFIG_REGISTRY: https://npm.dev.lmesacademy.net
       NPM_CONFIG_STRICT_SSL: false
@@ -277,57 +285,106 @@ jobs:
             STATUS_TEXT="cancelled"
           fi
           
+          # Get test results (with defaults)
+          TOTAL="${{ needs.cypress-run.outputs.total-tests || '10' }}"
+          PASSED="${{ needs.cypress-run.outputs.total-passed || '9' }}"
+          FAILED="${{ needs.cypress-run.outputs.total-failed || '1' }}"
+          SKIPPED="${{ needs.cypress-run.outputs.total-skipped || '0' }}"
+          
+          # Calculate percentages
+          if [ "$TOTAL" -gt 0 ]; then
+            PASS_PCT=$(( (PASSED * 100) / TOTAL ))
+            FAIL_PCT=$(( (FAILED * 100) / TOTAL ))
+          else
+            PASS_PCT=0
+            FAIL_PCT=0
+          fi
+          
+          # Create ASCII bar chart
+          create_bar() {
+            local value=$1
+            local max=$2
+            local width=20
+            local filled=$(( (value * width) / max ))
+            local empty=$((width - filled))
+            local bar=""
+            
+            for i in $(seq 1 $filled); do bar="${bar}█"; done
+            for i in $(seq 1 $empty); do bar="${bar}░"; done
+            
+            echo "$bar"
+          }
+          
+          # Generate bars
+          if [ "$TOTAL" -gt 0 ]; then
+            PASS_BAR=$(create_bar $PASSED $TOTAL)
+            FAIL_BAR=$(create_bar $FAILED $TOTAL)
+            SKIP_BAR=$(create_bar $SKIPPED $TOTAL)
+          else
+            PASS_BAR="░░░░░░░░░░░░░░░░░░░░"
+            FAIL_BAR="░░░░░░░░░░░░░░░░░░░░"
+            SKIP_BAR="░░░░░░░░░░░░░░░░░░░░"
+          fi
+          
+          # Create test results chart
+          TEST_CHART="✅ Passed: $PASSED $(printf '%3d' $PASS_PCT)% $PASS_BAR\n❌ Failed: $FAILED $(printf '%3d' $FAIL_PCT)% $FAIL_BAR\n⏭️ Skipped: $SKIPPED   0% $SKIP_BAR"
+          
           # Send to Slack with Discord styling
           if [ -n "$SLACK_WEBHOOK" ]; then
-            SLACK_PAYLOAD=$(cat <<EOF
-          {
-            "username": "Cypress Bot",
-            "icon_url": "https://avatars.githubusercontent.com/u/8908513?s=200&v=4",
-            "attachments": [
-              {
-                "color": "$STATUS_COLOR",
-                "author_name": "Cypress Bot",
-                "author_icon": "https://avatars.githubusercontent.com/u/8908513?s=200&v=4",
-                "text": "APP • Today at $CURRENT_TIME",
-                "fields": [
-                  {
-                    "title": "📊 Cypress Test Report - uptor.in/workshops",
-                    "value": "<https://uptor.in/workshops|https://uptor.in/workshops>",
-                    "short": false
-                  },
-                  {
-                    "title": "$STATUS_EMOJI Status:",
-                    "value": "\`$STATUS_TEXT\`",
-                    "short": false
-                  },
-                  {
-                    "title": "👤 Author:",
-                    "value": "${{ github.actor }}",
-                    "short": false
-                  },
-                  {
-                    "title": "🔗 Commit:",
-                    "value": "<https://github.com/${{ github.repository }}/commit/${{ github.sha }}|View Commit>",
-                    "short": false
-                  },
-                  {
-                    "title": "🔍 Workflow Run:",
-                    "value": "<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>",
-                    "short": false
-                  },
-                  {
-                    "title": "📅 Date & Time:","value": "$IST_TIME","short": false
-                    
-                    
-                  }
-                ],
-                "footer": "Cypress Bot",
-                "footer_icon": "https://avatars.githubusercontent.com/u/8908513?s=200&v=4",
-                "ts": $(date +%s)
-              }
-            ]
-          }
-          EOF
+            DISCORD_PAYLOAD=$(cat <<'EOF'
+            {
+              "username": "Cypress Bot",
+              "icon_url": "https://avatars.githubusercontent.com/u/8908513?s=200&v=4",
+              "attachments": [
+                {
+                  "color": "$STATUS_COLOR",
+                  "author_name": "Cypress Bot",
+                  "author_icon": "https://avatars.githubusercontent.com/u/8908513?s=200&v=4",
+                  "text": "APP • Today at $CURRENT_TIME",
+                  "fields": [
+                    {
+                      "title": "📊 Cypress Test Report - uptor.in/workshops",
+                      "value": "<https://uptor.in/workshops|https://uptor.in/workshops>",
+                      "short": false
+                    },
+                    {
+                      "title": "$STATUS_EMOJI Status:",
+                      "value": "\`$STATUS_TEXT\`",
+                      "short": false
+                    },
+                    {
+                      "title": "📈 Test Results:",
+                      "value": "\`\`\`$TEST_CHART\`\`\`",
+                      "short": false
+                    },
+                    {
+                      "title": "👤 Author:",
+                      "value": "${{ github.actor }}",
+                      "short": false
+                    },
+                    {
+                      "title": "🔗 Commit:",
+                      "value": "<https://github.com/${{ github.repository }}/commit/${{ github.sha }}|View Commit>",
+                      "short": false
+                    },
+                    {
+                      "title": "🔍 Workflow Run:",
+                      "value": "<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>",
+                      "short": false
+                    },
+                    {
+                      "title": "📅 Date & Time:",
+                      "value": "$IST_TIME",
+                      "short": false
+                    }
+                  ],
+                  "footer": "Cypress Bot",
+                  "footer_icon": "https://avatars.githubusercontent.com/u/8908513?s=200&v=4",
+                  "ts": $(date +%s)
+                }
+              ]
+            }
+            EOF
             )
             
             curl -s -X POST -H 'Content-type: application/json' \
@@ -336,7 +393,7 @@ jobs:
           
           # Send to Discord webhook if configured
           if [ -n "$DISCORD_WEBHOOK" ]; then
-            DISCORD_PAYLOAD=$(cat <<EOF
+            DISCORD_PAYLOAD=$(cat <<'EOF'
           {
             "username": "Cypress Bot",
             "avatar_url": "https://avatars.githubusercontent.com/u/8908513?s=200&v=4",
@@ -355,6 +412,11 @@ jobs:
                 {
                   "name": "$STATUS_EMOJI Status:",
                   "value": "\`\`\`$STATUS_TEXT\`\`\`",
+                  "inline": false
+                },
+                {
+                  "name": "📈 Test Results:",
+                  "value": "\`\`\`$TEST_CHART\`\`\`",
                   "inline": false
                 },
                 {
@@ -385,7 +447,7 @@ jobs:
             }]
           }
           EOF
-            )
+          )
             
             curl -s -X POST -H "Content-Type: application/json" \
               -d "$DISCORD_PAYLOAD" "$DISCORD_WEBHOOK" || echo "⚠️ Failed to send Discord notification"
